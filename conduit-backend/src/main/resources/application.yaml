@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: ${APP_NAME:conduit-api}
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_MAX:10}
+      connection-timeout: ${DATABASE_TIMEOUT:30000}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+server:
+  address: ${APP_HOST:0.0.0.0}
+  port: ${APP_PORT:8080}
+  shutdown: graceful
+  error:
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+logging:
+  level:
+    com.conduit: ${LOG_LEVEL:debug}
+  file:
+    name: ${LOG_FILE:logs/conduit-api.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 14
+
+conduit:
+  app:
+    level: ${APP_LEVEL:development}
+  client-url: ${CLIENT_URL:http://localhost:3000}
+  auth:
+    secret: ${AUTH_SECRET:}
+    token-ttl: 24h
+    bcrypt-rounds: ${BCRYPT_ROUNDS:10}
+  seed:
+    enabled: ${SEED_ENABLED:false}
+    allow-production: ${SEED_ALLOW_PRODUCTION:false}
