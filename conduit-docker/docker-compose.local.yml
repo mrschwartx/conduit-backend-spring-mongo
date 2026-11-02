@@ -1,19 +1,19 @@
 services:
-  conduit-postgres:
-    image: postgres:18.3
-    container_name: conduit-postgres
+  conduit-mongo:
+    image: mongo:8.0
+    container_name: conduit-mongo
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-conduit}
-      POSTGRES_USER: ${DB_USER:-conduit}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, run make docker/env}
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USER:-conduit}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, run make docker/env}
     volumes:
-      - conduit-postgres-data:/var/lib/postgresql
+      - conduit-mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok' | grep -q 1"]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
 
   conduit-backend:
     build:
@@ -24,17 +24,16 @@ services:
     restart: unless-stopped
     environment:
       APP_LEVEL: ${APP_LEVEL:-development}
-      DATABASE_URL: jdbc:postgresql://conduit-postgres:5432/${DB_NAME:-conduit}
-      DATABASE_USER: ${DB_USER:-conduit}
-      DATABASE_PASSWORD: ${DB_PASSWORD}
+      MONGODB_URI: mongodb://${DB_USER:-conduit}:${DB_PASSWORD}@conduit-mongo:27017/?authSource=admin
+      MONGODB_DATABASE: ${DB_NAME:-conduit}
       AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required, run make docker/env}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "${PORT:-8080}:8080"
     depends_on:
-      conduit-postgres:
+      conduit-mongo:
         condition: service_healthy
 
 volumes:
-  conduit-postgres-data:
+  conduit-mongo-data:

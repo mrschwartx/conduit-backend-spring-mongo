@@ -1,8 +1,8 @@
 # Conduit Backend (Spring Boot)
 
-A RealWorld ("Conduit") backend: register and log in, edit your profile, follow authors, publish articles with tags, favorite articles and comment on them. It is a REST API built with Spring Boot 4 and PostgreSQL, organised as a modular monolith with Domain-Driven Design and Clean Architecture. The HTTP contract is defined by [`conduit-openapi/openapi.yml`](conduit-openapi/openapi.yml).
+A RealWorld ("Conduit") backend: register and log in, edit your profile, follow authors, publish articles with tags, favorite articles and comment on them. It is a REST API built with Spring Boot 4 and MongoDB, organised as a modular monolith with Domain-Driven Design and Clean Architecture. The HTTP contract is defined by [`conduit-openapi/openapi.yml`](conduit-openapi/openapi.yml).
 
-**Stack:** Java 25 · Spring Boot 4 · Spring Web MVC · Spring Security · Spring Data JPA · PostgreSQL 18 · Flyway · JWT (jjwt) · bcrypt · JUnit 5 · Docker · GitHub Actions
+**Stack:** Java 25 · Spring Boot 4 · Spring Web MVC · Spring Security · MongoDB 8 (Java sync driver) · JWT (jjwt) · bcrypt · JUnit 5 · Docker · GitHub Actions
 
 ## Quick start
 
@@ -17,7 +17,7 @@ openssl rand -base64 32
 ./mvnw spring-boot:run
 ```
 
-Paste the generated value into `AUTH_SECRET` in `.env`. The API runs at http://localhost:8080/api/v1 and pgAdmin at http://localhost:8081 (login `admin@conduit.dev` / `admin`, server host `conduit-postgres`, user `dev_user`, password `dev_pass`). Flyway migrations run on startup.
+Paste the generated value into `AUTH_SECRET` in `.env`. The API runs at http://localhost:8080/api/v1 and mongo-express at http://localhost:8081 (MongoDB user `dev_user`, password `dev_pass`). Collections and indexes are created on startup.
 
 | Goal            | Command                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
@@ -36,11 +36,8 @@ Demo login after seeding: `johndoe123@mail.com` / `password123`.
 | `APP_NAME`              | `conduit-api`           | Application name                                |
 | `APP_HOST` / `APP_PORT` | `0.0.0.0` / `8080`      | Bind address and port                           |
 | `APP_LEVEL`             | `development`           | `production` blocks seeding unless allowed      |
-| `DATABASE_URL`          | required                | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/conduit_dev` |
-| `DATABASE_USER`         | required                | PostgreSQL user                                 |
-| `DATABASE_PASSWORD`     | required                | PostgreSQL password                             |
-| `DATABASE_POOL_MAX`     | `10`                    | Maximum pool size                               |
-| `DATABASE_TIMEOUT`      | `30000`                 | Connection timeout in ms                        |
+| `MONGODB_URI`           | required                | Connection string, e.g. `mongodb://dev_user:dev_pass@localhost:27017/?authSource=admin` |
+| `MONGODB_DATABASE`      | `conduit`               | Database name                                   |
 | `AUTH_SECRET`           | required                | JWT secret, at least 32 characters              |
 | `BCRYPT_ROUNDS`         | `10`                    | bcrypt cost factor                              |
 | `CLIENT_URL`            | `http://localhost:3000` | Allowed CORS origin                             |
@@ -63,7 +60,7 @@ conduit-backend/src/main/java/com/conduit/backend/
   comments/    article comments
 ```
 
-Each module has `domain/` (entities, value objects, repository and query contracts), `application/` (use cases), `infrastructure/` (JPA, JWT, bcrypt) and `presentation/` (controllers).
+Each module has `domain/` (entities, value objects, repository and query contracts), `application/` (use cases), `infrastructure/` (MongoDB, JWT, bcrypt) and `presentation/` (controllers).
 
 - Dependencies point inward. Modules share only `shared`, including the `Profile` read model used for authors.
 - Reads that need author, favorite and follow data go through `ArticleQueries` and `CommentQueries`, which batch their lookups to avoid N+1 queries.
@@ -71,16 +68,18 @@ Each module has `domain/` (entities, value objects, repository and query contrac
 
 ## Database
 
-Flyway migrations live in `src/main/resources/db/migration`.
+Collections and indexes are created idempotently on startup by `MongoIndexes`; there are no migration files.
 
-| Table          | Notes                                                                        |
-| -------------- | ---------------------------------------------------------------------------- |
-| `users`        | UUID `id`, case-insensitive unique `email` and `username`, nullable `bio` and `image` |
-| `follows`      | `(follower_id, followee_id)` primary key, self-follow blocked by `CHECK`     |
-| `articles`     | UUID `id`, unique `slug`, `author_id` with `ON DELETE CASCADE`               |
-| `article_tags` | `(article_id, tag)` primary key                                              |
-| `favorites`    | `(user_id, article_id)` primary key                                          |
-| `comments`     | identity `id`, cascades with its article and author                          |
+| Collection  | Notes                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| `users`     | string UUID `_id`, `usernameLower` and `emailLower` carry the case-insensitive unique indexes   |
+| `follows`   | unique `(followerId, followeeId)`, written with an idempotent upsert                            |
+| `articles`  | string UUID `_id`, unique `slug`, tags embedded as an ordered `tags` array                      |
+| `favorites` | unique `(userId, articleId)`, written with an idempotent upsert                                 |
+| `comments`  | numeric `_id` from the `counters` collection                                                    |
+| `counters`  | `{_id: "comments", seq}` sequence used for comment ids                                          |
+
+Deleting an article also deletes its favorites and comments.
 
 ## API
 
@@ -137,10 +136,10 @@ Protected endpoints check authentication (401), then existence (404), ownership 
 | Layer       | Command         | What it proves                                          |
 | ----------- | --------------- | ------------------------------------------------------- |
 | Unit        | `./mvnw test`   | Domain, use cases, JWT and bcrypt without I/O           |
-| Integration | `./mvnw verify` | Full HTTP flows on a real PostgreSQL (`*IT` classes)    |
+| Integration | `./mvnw verify` | Full HTTP flows on a real MongoDB (`*IT` classes)    |
 
-Integration tests read `TEST_DATABASE_URL` (default: the development database), create a temporary database, run the migrations and drop it on exit.
+Integration tests read `TEST_MONGODB_URI` (default: the development MongoDB), use a temporary database and drop it on exit.
 
 ## CI
 
-`.github/workflows/ci.yml` builds with JDK 25, runs unit and integration tests against PostgreSQL 18, then builds the Docker image, checks `/health`, registers a user through `POST /api/v1/users` and runs the seed.
+`.github/workflows/ci.yml` builds with JDK 25, runs unit and integration tests against MongoDB 8, then builds the Docker image, checks `/health`, registers a user through `POST /api/v1/users` and runs the seed.

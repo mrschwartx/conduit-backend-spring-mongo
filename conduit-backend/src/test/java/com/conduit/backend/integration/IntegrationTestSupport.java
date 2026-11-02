@@ -18,9 +18,8 @@ abstract class IntegrationTestSupport {
 	@DynamicPropertySource
 	static void configure(DynamicPropertyRegistry registry) {
 		TestDatabase database = TestDatabase.INSTANCE;
-		registry.add("spring.datasource.url", () -> database.jdbcUrl);
-		registry.add("spring.datasource.username", () -> database.username);
-		registry.add("spring.datasource.password", () -> database.password);
+		registry.add("conduit.mongo.uri", () -> database.uri);
+		registry.add("conduit.mongo.database", () -> database.name);
 	}
 
 	ApiClient client() {

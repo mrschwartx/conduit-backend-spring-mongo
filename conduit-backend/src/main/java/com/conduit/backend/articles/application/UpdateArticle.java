@@ -21,9 +21,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class UpdateArticle {
 
-	private final ArticleRepository articleRepository;
-
 	private static final List<String> FIELDS = List.of("title", "description", "body", "tagList");
+
+	private final ArticleRepository articleRepository;
 
 	private final ArticleQueries articleQueries;
 

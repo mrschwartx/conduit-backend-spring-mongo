@@ -15,6 +15,7 @@ import org.springframework.validation.annotation.Validated;
 public record ConduitProperties(
 		@Valid @NotNull App app,
 		@NotBlank String clientUrl,
+		@Valid @NotNull Mongo mongo,
 		@Valid @NotNull Auth auth,
 		@Valid @NotNull Seed seed) {
 
@@ -23,6 +24,9 @@ public record ConduitProperties(
 		public boolean production() {
 			return "production".equals(level);
 		}
+	}
+
+	public record Mongo(@NotBlank String uri, @NotBlank String database) {
 	}
 
 	public record Auth(

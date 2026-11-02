@@ -1,7 +1,11 @@
 package com.conduit.backend.shared.infrastructure.persistence;
 
 import com.conduit.backend.shared.domain.Profile;
-import jakarta.persistence.EntityManager;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Projections;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,47 +13,48 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.bson.Document;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class AuthorProfiles {
 
-	private final EntityManager entityManager;
+	private final MongoCollection<Document> users;
 
-	public AuthorProfiles(EntityManager entityManager) {
-		this.entityManager = entityManager;
+	private final MongoCollection<Document> follows;
+
+	public AuthorProfiles(MongoDatabase database) {
+		this.users = database.getCollection(MongoCollections.USERS);
+		this.follows = database.getCollection(MongoCollections.FOLLOWS);
 	}
 
-	@Transactional(readOnly = true)
 	public Map<UUID, Profile> load(Collection<UUID> authorIds, UUID viewerId) {
 		if (authorIds.isEmpty()) {
 			return Map.of();
 		}
-		Set<UUID> followed = viewerId == null ? Set.of() : followed(authorIds, viewerId);
-		List<?> rows = entityManager
-				.createNativeQuery("select id, username, bio, image from users where id in (:ids)")
-				.setParameter("ids", authorIds)
-				.getResultList();
+		List<String> ids = BsonValues.ids(authorIds);
+		Set<UUID> followed = viewerId == null ? Set.of() : followed(ids, viewerId);
 		Map<UUID, Profile> profiles = new HashMap<>();
-		for (Object row : rows) {
-			Object[] columns = (Object[]) row;
-			UUID id = (UUID) columns[0];
-			profiles.put(id, new Profile((String) columns[1], (String) columns[2], (String) columns[3],
-					followed.contains(id)));
+		List<Document> rows = users.find(Filters.in("_id", ids))
+				.projection(Projections.include("username", "bio", "image"))
+				.into(new ArrayList<>());
+		for (Document row : rows) {
+			UUID id = BsonValues.uuid(row, "_id");
+			profiles.put(id, new Profile(row.getString("username"), row.getString("bio"),
+					row.getString("image"), followed.contains(id)));
 		}
 		return profiles;
 	}
 
-	private Set<UUID> followed(Collection<UUID> authorIds, UUID viewerId) {
-		List<?> rows = entityManager
-				.createNativeQuery("select followee_id from follows where follower_id = :viewer and followee_id in (:ids)")
-				.setParameter("viewer", viewerId)
-				.setParameter("ids", authorIds)
-				.getResultList();
+	private Set<UUID> followed(List<String> authorIds, UUID viewerId) {
 		Set<UUID> followed = new HashSet<>();
-		for (Object row : rows) {
-			followed.add((UUID) row);
+		List<Document> rows = follows.find(Filters.and(
+				Filters.eq("followerId", BsonValues.id(viewerId)),
+				Filters.in("followeeId", authorIds)))
+				.projection(Projections.include("followeeId"))
+				.into(new ArrayList<>());
+		for (Document row : rows) {
+			followed.add(BsonValues.uuid(row, "followeeId"));
 		}
 		return followed;
 	}
