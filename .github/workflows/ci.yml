@@ -39,7 +39,7 @@ jobs:
         working-directory: conduit-backend
     services:
       mongo:
-        image: mongo:8.0
+        image: mongo:7.0
         ports:
           - 27017:27017
         options: >-

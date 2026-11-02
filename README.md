@@ -2,7 +2,7 @@
 
 A RealWorld ("Conduit") backend: register and log in, edit your profile, follow authors, publish articles with tags, favorite articles and comment on them. It is a REST API built with Spring Boot 4 and MongoDB, organised as a modular monolith with Domain-Driven Design and Clean Architecture. The HTTP contract is defined by [`conduit-openapi/openapi.yml`](conduit-openapi/openapi.yml).
 
-**Stack:** Java 25 · Spring Boot 4 · Spring Web MVC · Spring Security · MongoDB 8 (Java sync driver) · JWT (jjwt) · bcrypt · JUnit 5 · Docker · GitHub Actions
+**Stack:** Java 25 · Spring Boot 4 · Spring Web MVC · Spring Security · MongoDB 7 (Java sync driver) · JWT (jjwt) · bcrypt · JUnit 5 · Docker · GitHub Actions
 
 ## Quick start
 
@@ -142,4 +142,4 @@ Integration tests read `TEST_MONGODB_URI` (default: the development MongoDB), us
 
 ## CI
 
-`.github/workflows/ci.yml` builds with JDK 25, runs unit and integration tests against MongoDB 8, then builds the Docker image, checks `/health`, registers a user through `POST /api/v1/users` and runs the seed.
+`.github/workflows/ci.yml` builds with JDK 25, runs unit and integration tests against MongoDB 7, then builds the Docker image, checks `/health`, registers a user through `POST /api/v1/users` and runs the seed.
